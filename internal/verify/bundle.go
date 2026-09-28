@@ -42,10 +42,11 @@ func (e *OtherBundleError) Error() string {
 
 // ManifestRefusedError is a registry that answered the manifest request with
 // something brig refuses: bytes that are not the digest it asked for, an
-// index, a body too large to be a bundle manifest, or a token realm over
-// plain http. hull's provenance record stands in for a registry that did not
-// answer. A registry that answered wrongly is a different case, and falling
-// back on the record there forgets that it did, so it has a type of its own.
+// index, a body too large to be a bundle manifest, or a token realm or
+// redirect over plain http. hull's provenance record stands in for a registry
+// that did not answer. A registry that answered wrongly is a different case,
+// and falling back on the record there forgets that it did, so it has a type
+// of its own.
 type ManifestRefusedError struct{ Reason string }
 
 func (e *ManifestRefusedError) Error() string { return e.Reason }
@@ -56,8 +57,29 @@ func refusedf(format string, a ...any) error {
 
 // registryClient makes the manifest requests. A variable so a test can point
 // it at a TLS server of its own. It keeps http.DefaultTransport, and with it
-// the proxy settings from the environment.
+// the proxy settings from the environment. registryDo adds the redirect
+// policy on every request, so a client a test swaps in gets it too.
 var registryClient = http.DefaultClient
+
+// registryDo sends req with registryClient, following only https redirects.
+// The https check on the token realm holds only if the realm cannot then
+// hand the request on to plain http, and the same goes for the manifest.
+func registryDo(req *http.Request) (*http.Response, error) {
+	c := *registryClient
+	c.CheckRedirect = httpsRedirectsOnly
+	return c.Do(req)
+}
+
+func httpsRedirectsOnly(req *http.Request, via []*http.Request) error {
+	if req.URL.Scheme != "https" {
+		return refusedf("the registry redirected to %s, and brig follows only https", req.URL.Redacted())
+	}
+	// The limit http.Client applies when CheckRedirect is nil.
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	return nil
+}
 
 // registryTimeout bounds the manifest fetch, token request included, for the
 // reason cosignTimeout bounds cosign: a registry that never answers must not
@@ -153,7 +175,7 @@ func getManifest(ctx context.Context, u, token string) ([]byte, error) {
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	resp, err := registryClient.Do(req)
+	resp, err := registryDo(req)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +226,7 @@ func anonymousToken(ctx context.Context, challenge string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	resp, err := registryClient.Do(req)
+	resp, err := registryDo(req)
 	if err != nil {
 		return "", err
 	}

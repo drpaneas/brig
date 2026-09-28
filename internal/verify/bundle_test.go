@@ -46,6 +46,7 @@ type fakeRegistry struct {
 	body     []byte
 	served   string
 	realm    string
+	redirect string
 	asked    []string
 	tokenHit int
 }
@@ -56,6 +57,8 @@ func newFakeRegistry(t *testing.T, body []byte, served string) *fakeRegistry {
 	r.srv = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		r.asked = append(r.asked, req.URL.Path)
 		switch {
+		case req.URL.Path == "/redirect":
+			http.Redirect(w, req, r.redirect, http.StatusFound)
 		case req.URL.Path == "/token":
 			r.tokenHit++
 			if req.URL.Query().Get("scope") != "repository:nofireai/hull-assets:pull" {
@@ -161,6 +164,34 @@ func TestBundleDigestsRefusesAPlainHTTPRealm(t *testing.T) {
 	var refused *ManifestRefusedError
 	if !errors.As(err, &refused) {
 		t.Errorf("a plain-http realm is an answer brig refused, and the error does not say so: %T %v", err, err)
+	}
+}
+
+// The https realm check means nothing if the realm can hand the request on.
+// An https realm that redirects to plain http is refused at the redirect, and
+// the plain-http host is never asked.
+func TestBundleDigestsRefusesARealmThatRedirectsToPlainHTTP(t *testing.T) {
+	body := bundleManifest(ociManifest, map[string]string{"Image": kernelDigest})
+	reg := newFakeRegistry(t, body, sha(body))
+	plainHit := 0
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		plainHit++
+		_, _ = w.Write([]byte(`{"token":"anon"}`))
+	}))
+	t.Cleanup(plain.Close)
+	reg.realm = reg.srv.URL + "/redirect"
+	reg.redirect = plain.URL + "/token"
+
+	got, err := BundleDigests(reg.ref("darwin-arm64"), sha(body))
+	if err == nil || !strings.Contains(err.Error(), "https") {
+		t.Fatalf("followed a redirect to plain http and read %v (err %v)", got, err)
+	}
+	if plainHit != 0 {
+		t.Errorf("the plain-http redirect target was asked %d times", plainHit)
+	}
+	var refused *ManifestRefusedError
+	if !errors.As(err, &refused) {
+		t.Errorf("a redirect to plain http is an answer brig refused, and the error does not say so: %T %v", err, err)
 	}
 }
 
