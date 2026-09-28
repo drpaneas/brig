@@ -690,11 +690,13 @@ both files match.
 
 What a difference does depends on who chose the directory:
 
-- `BRIG_BOOT_ASSETS` unset: Brig chose the directory and fetched into it,
-  so a file that differs, or a `provenance.json` for another bundle, refuses
-  the run under `warn` and `require`. The refusal names the file, its digest
-  and the digest the bundle lists. Deleting the two files fetches the bundle
-  again.
+- `BRIG_BOOT_ASSETS` unset: Brig chose the directory and fetches into it, by
+  the digest whose signature verified. Files that match a `provenance.json`
+  for another bundle are that bundle, fetched before the tag moved: Brig
+  fetches the verified digest over them and compares again. Any other file
+  that differs refuses the run under `warn` and `require`, and nothing is
+  fetched over it. The refusal names the file, its digest and the digest the
+  bundle lists. Deleting the two files fetches the bundle again.
 - `BRIG_BOOT_ASSETS` set: the directory is someone's build. `warn` states the
   difference and boots it, and nothing vouches for that kernel. `require`
   refuses. A Linux runtime bundle from before its signed record (below) lands
