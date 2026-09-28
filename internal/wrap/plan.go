@@ -264,8 +264,13 @@ func ruleText(r policy.Rule) string {
 // from or why not. Names only.
 func credentialText(cr PlanCredential) string {
 	var detail string
-	switch cr.State {
-	case creds.StateResolved:
+	switch {
+	case cr.State == creds.StateResolved && cr.Delivery == creds.DeliveryNone:
+		// A required secret the chain passed over. The store has it, so the
+		// run starts, but its value reaches no guest variable or file, and
+		// "from the secret" would read as if it did.
+		detail = "the secret " + cr.Secret + " is in the store, and no binding delivers it"
+	case cr.State == creds.StateResolved:
 		detail = "from the environment"
 		if cr.Source == creds.SourceSecret {
 			detail = "from the secret " + cr.Secret
@@ -273,7 +278,7 @@ func credentialText(cr PlanCredential) string {
 	default:
 		detail = cr.State + ": " + cr.Reason
 	}
-	if cr.Required && cr.State != creds.StateResolved {
+	if cr.Required && (cr.State != creds.StateResolved || cr.Delivery == creds.DeliveryNone) {
 		detail += " (required)"
 	}
 	return fmt.Sprintf("%s (%s) %s", cr.Name, cr.Delivery, detail)

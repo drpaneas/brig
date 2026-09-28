@@ -229,3 +229,24 @@ func TestPlanWithoutARuntimeMarksTheRuntimeRows(t *testing.T) {
 		t.Errorf("the plan left rows empty: %+v", d)
 	}
 }
+
+// A required secret the chain passed over has a row with no delivery. When the
+// store has it, the row must not read like one the guest receives: the value
+// reaches nowhere, and "from the secret x" says it does. A delivered secret
+// still reads that way.
+func TestPlanDoesNotDeliverARequiredSecretNoBindingUses(t *testing.T) {
+	passedOver := credentialText(PlanCredential{Name: "x", Delivery: creds.DeliveryNone,
+		Source: creds.SourceSecret, Secret: "x", Required: true, State: creds.StateResolved})
+	if strings.Contains(passedOver, "from the secret") {
+		t.Errorf("a secret no binding delivers reads as delivered: %q", passedOver)
+	}
+	if !strings.Contains(passedOver, "no binding delivers it") || !strings.Contains(passedOver, "(required)") {
+		t.Errorf("row = %q, want it to say no binding delivers the required secret", passedOver)
+	}
+
+	delivered := credentialText(PlanCredential{Name: "GH_TOKEN", Delivery: creds.DeliveryEnv,
+		Source: creds.SourceSecret, Secret: "gh", Required: true, State: creds.StateResolved})
+	if want := "GH_TOKEN (env) from the secret gh"; delivered != want {
+		t.Errorf("delivered row = %q, want %q", delivered, want)
+	}
+}
