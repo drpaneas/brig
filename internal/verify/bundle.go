@@ -105,9 +105,12 @@ const (
 // registry that answers it with other bytes is refused here.
 //
 // Standard library only, with the anonymous token flow the public ghcr
-// packages take. brig shells out to cosign and oras for everything else, but
-// neither prints a manifest's layer list in a form worth parsing, and this is
-// two GETs.
+// packages take. brig shells out to cosign and oras for everything else.
+// `oras manifest fetch` prints the same manifest, but this runs on every
+// verified boot, where oras is otherwise needed only to download a missing
+// bundle. In process the request carries the 30 second and 1 MiB bounds
+// below, refuses a plain-http realm or redirect, and hashes the exact bytes
+// the registry sent, with no binary to find and no output to parse.
 func BundleDigests(ref, digest string) (BootDigests, error) {
 	host, repo, err := splitRef(ref)
 	if err != nil {
