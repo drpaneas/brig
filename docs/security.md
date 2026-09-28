@@ -677,14 +677,45 @@ that fails stops the boot outright, in every mode except `off`. There is no
 `[y/N]` prompt the way there is for the image, because there is no reading of
 a bad kernel signature worth asking about.
 
-One thing the check does not buy: nothing is pinned from the result. The
-check verifies a registry reference, not the bytes that boot. What actually
-starts the guest is whatever kernel and initrd sit in `BRIG_BOOT_ASSETS`, or
-failing that the runtime's own asset directory, or the platform default.
-Only existence and being non-empty are checked there. Brig does not bind the
-kernel on disk to the artifact it just verified. `BRIG_VERIFY_REGISTRY`,
-`BRIG_VERIFY_IDENTITY` and `BRIG_VERIFY_ISSUER` repoint the image's trust
-policy only: the kernel's identity is fixed.
+The signature covers the bundle's manifest, and the manifest lists a sha256
+for each file. Brig keeps the digest whose signature verified, reads the
+manifest from the registry by that digest, and checks that its bytes hash to
+it. On macOS, when the registry does not answer, hull's `provenance.json` in
+the asset directory stands in, but only a record that names the verified
+digest. A registry that answers with bytes that are not that digest, an
+index, or a token realm over plain http gets no fallback. Brig then hashes
+the kernel and initrd it hands the runtime and compares them with that list
+before the boot. `brig: image and boot assets verified` appears only after
+both files match.
+
+What a difference does depends on who chose the directory:
+
+- `BRIG_BOOT_ASSETS` unset: Brig chose the directory and fetched into it,
+  so a file that differs, or a `provenance.json` for another bundle, refuses
+  the run under `warn` and `require`. The refusal names the file, its digest
+  and the digest the bundle lists. Deleting the two files fetches the bundle
+  again.
+- `BRIG_BOOT_ASSETS` set: the directory is someone's build. `warn` states the
+  difference and boots it, and nothing vouches for that kernel. `require`
+  refuses. The Linux runtime bundle points `BRIG_BOOT_ASSETS` at its own
+  kernel and initrd and ships no digests for them yet, so under `require` its
+  directory refuses until it does. hull checks a directory against its own
+  `provenance.json` too, so a named copy of hull's directory with a changed
+  file fails at hull even under `warn`.
+- Digests Brig cannot read (no registry answer and no matching record, a
+  registry answer Brig refused, or a record with no entry for one of the
+  files): `warn` states it and boots, `require` refuses.
+
+`BRIG_VERIFY=off` skips the signature and the digest checks, and one line
+says so. A `BRIG_BOOT_ASSETS_REF` under `ghcr.io/nofireai/` is checked the
+same way against its own digest. Any other reference has no signature of ours,
+so there is no digest to bind.
+
+The comparison happens before the runtime starts, and the runtime opens the
+files later by path. Something that can write to the asset directory between
+the two can still swap a file. That is the host's own user, not the guest.
+`BRIG_VERIFY_REGISTRY`, `BRIG_VERIFY_IDENTITY` and `BRIG_VERIFY_ISSUER`
+repoint the image's trust policy only: the kernel's identity is fixed.
 
 ## Brig's own binaries
 
