@@ -683,9 +683,9 @@ manifest from the registry by that digest, and checks that its bytes hash to
 it. On macOS, when the registry does not answer, hull's `provenance.json` in
 the asset directory stands in, but only a record that names the verified
 digest. A registry that answers with bytes that are not that digest, an
-index, or a token realm over plain http gets no fallback. Brig then hashes
-the kernel and initrd it hands the runtime and compares them with that list
-before the boot. `brig: image and boot assets verified` appears only after
+index, or a token realm or redirect over plain http gets no fallback. Brig
+then hashes the kernel and initrd it hands the runtime and compares them with
+that list before the boot. `brig: image and boot assets verified` appears only after
 both files match.
 
 What a difference does depends on who chose the directory:
