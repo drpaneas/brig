@@ -55,6 +55,10 @@ usage:
   brig info <ref>                                print the execution envelope and the
                                                  full environment, by name -- fails
                                                  if a declared secret is missing
+  brig plan <ref>                                the mounts, network, policies
+                                                 and credentials by name that a
+                                                 run gets. Opens no secret, and
+                                                 marks a missing one unresolved
   brig network ls        <ref>                   the ports a sandbox publishes
   brig network publish   <ref> PORT...           open a guest port on the host
   brig network unpublish <ref> PORT...|--all     close one again
@@ -90,8 +94,8 @@ global flags (left of the command, as in: brig -q run claude):
                          even here
                          (-q after the verb works until v0.4.0)
       --json             machine-readable output, for the read verbs: ls, info,
-                         agent ls, secret ls, doctor, version and the network
-                         verbs. Also accepted after the verb (brig ls
+                         plan, agent ls, secret ls, doctor, version and the
+                         network verbs. Also accepted after the verb (brig ls
                          --json). Every other verb refuses it
       --json (with run)  run the agent as a child and, after it exits, print one
                          JSON line with its exit status -- so a script can tell
@@ -410,7 +414,7 @@ func dispatch(args []string) error {
 		}
 		rmDryRun = o.dryRun
 		rest = others
-	case "run", "sh", "stop", "info":
+	case "run", "sh", "stop", "info", "plan":
 		// The taught lifecycle spellings. They fall through to the run line
 		// below, which is where the ref and the flags are read.
 	case "network":
@@ -511,7 +515,7 @@ func dispatch(args []string) error {
 	wantJSON := globalJSON || opts.json
 	switch {
 	case !wantJSON:
-	case verb == "info" || verb == "env":
+	case verb == "info" || verb == "env" || verb == "plan":
 	// All three answer with what the sandbox publishes.
 	case onPortLine(verb):
 	case verb == "run" || verb == "sh":
@@ -572,7 +576,8 @@ func dispatch(args []string) error {
 		// So it carries on without one, and the report marks that single line
 		// unavailable. env is the old spelling of the same command and gets the
 		// same treatment, or the spelling brig recommends would be the one that
-		// fails. Every other verb needs the runtime to do its work, so they
+		// fails. plan is a preview of the same kind and answers the same way.
+		// Every other verb needs the runtime to do its work, so they
 		// still fail here, naming what is missing.
 		//
 		// But only "no runtime on PATH" is a state the report should paper
@@ -581,7 +586,7 @@ func dispatch(args []string) error {
 		// surface here as they do for run, naming the real cause. Match the
 		// sentinel, not any error, or a future error type silently rejoins the
 		// swallow.
-		reports := verb == "info" || verb == "env"
+		reports := verb == "info" || verb == "env" || verb == "plan"
 		if !reports || !errors.Is(err, runtime.ErrNoRuntime) {
 			return err
 		}
@@ -627,6 +632,18 @@ func dispatch(args []string) error {
 		return publishPorts(cfg, refDisplay(profileName, opts), tail, wantJSON)
 	case "network unpublish":
 		return unpublishPorts(cfg, refDisplay(profileName, opts), tail, opts.all, wantJSON)
+	case "plan":
+		// Ahead of BuildEnv, which reads every needed secret and fails on a
+		// missing one. The plan lists the store instead. It lists the store
+		// `brig secret ls` lists, through the same seam, so the two agree
+		// about what is there.
+		cfg.OpenStore = func() (creds.SecretReader, error) { return openStore() }
+		d := cfg.Plan()
+		if wantJSON {
+			return writeJSONDocument(cfg.Out, "Plan", d)
+		}
+		cfg.PrintPlan(d)
+		return nil
 	}
 
 	set, err := cfg.BuildEnv()
@@ -3289,14 +3306,14 @@ var verbosity = wrap.Normal
 var globalJSON bool
 
 // verbTakesGlobalJSON reports whether the verb in the global position has a
-// --json form to ask for. The five read verbs do; run and sh do since #110,
+// --json form to ask for. The read verbs do; run and sh do since #110,
 // where --json runs the agent as a child and prints its outcome; agent and
 // secret only in their ls subcommand, which is the one that lists. Everything
 // else -- stop, rm, and the verbs that manage rather than list -- has none, so
 // --json left of it is a usage error rather than a flag dropped on the floor.
 func verbTakesGlobalJSON(verb string, rest []string) bool {
 	switch verb {
-	case "ls", "info", "env", "doctor", "version", "--version", "run", "sh":
+	case "ls", "info", "plan", "env", "doctor", "version", "--version", "run", "sh":
 		return true
 	case "agent", "secret":
 		return len(rest) > 0 && rest[0] == "ls"
@@ -3314,7 +3331,7 @@ func verbTakesGlobalJSON(verb string, rest []string) bool {
 // from here.
 func jsonUnsupportedf(verb string) error {
 	return usagef("`brig %s` has no --json output. --json is for the read verbs: "+
-		"ls, info, agent ls, secret ls, doctor, version and the network verbs "+
+		"ls, info, plan, agent ls, secret ls, doctor, version and the network verbs "+
 		"(env takes it too, but env is deprecated; prefer info), and for run "+
 		"and sh", verb)
 }

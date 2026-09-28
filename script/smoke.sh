@@ -825,6 +825,32 @@ grep -q 'is now `brig info`' "$WORK/env.err" \
 grep -q '^SANDBOX .*brig-claude-code' "$WORK/env.out" \
   && ok "env still prints the report" || bad "env still prints the report: $(cat "$WORK/env.out")"
 
+echo "== plan =="
+# The permission view, read without opening a secret. It boots nothing, so the
+# stub sees no run and no exec, and the values in the shell appear nowhere.
+: > "$STUB_LOG"
+out="$(CLAUDE_CODE_OAUTH_TOKEN=env-token-secret GH_TOKEN=gh-secret \
+  "$WORK/brig" plan claude 2>&1)"; rc=$?
+[ "$rc" = 0 ] && ok "plan exits 0" || bad "plan exits 0 -- got $rc: $out"
+case "$out" in
+  *"GH_TOKEN (env) from the environment"*) ok "plan names a credential and its delivery" ;;
+  *) bad "plan names a credential and its delivery -- got: $out" ;;
+esac
+case "$out" in
+  *env-token-secret*|*gh-secret*) bad "plan printed a credential VALUE" ;;
+  *) ok "plan prints names, never values" ;;
+esac
+grep -Eq '^argv: (run|exec) ' "$STUB_LOG" \
+  && bad "plan booted or entered a sandbox: $(cat "$STUB_LOG")" \
+  || ok "plan boots nothing"
+d1="$("$WORK/brig" --json plan claude 2>/dev/null | grep '"digest"')"
+d2="$("$WORK/brig" plan claude --json 2>/dev/null | grep '"digest"')"
+[ -n "$d1" ] && [ "$d1" = "$d2" ] \
+  && ok "the plan digest is stable" || bad "the plan digest is stable -- got '$d1' and '$d2'"
+d3="$("$WORK/brig" --json plan claude --mem 1234 2>/dev/null | grep '"digest"')"
+[ -n "$d3" ] && [ "$d3" != "$d1" ] \
+  && ok "the plan digest moves with the limits" || bad "the plan digest moves with the limits -- got '$d3'"
+
 echo "== named session =="
 : > "$STUB_LOG"
 "$WORK/brig" run claude --name 'My Big Refactor' -p hi > /dev/null 2>&1
@@ -1407,6 +1433,14 @@ out="$(PATH="" BRIG_RUNTIME_BIN= "$WORK/brig" env claude 2>&1)"; rc=$?
 # the person whose runtime is broken to the wrong command.
 out="$(PATH="" BRIG_RUNTIME_BIN= "$WORK/brig" info claude 2>&1)"; rc=$?
 [ "$rc" = 0 ] && ok "info with no runtime exits 0" || bad "info with no runtime exits 0 -- got $rc: $out"
+# plan is the same kind of preview and answers the same way. Its own variable,
+# because the cases below still read the report above.
+pout="$(PATH="" BRIG_RUNTIME_BIN= "$WORK/brig" plan claude 2>&1)"; rc=$?
+[ "$rc" = 0 ] && ok "plan with no runtime exits 0" || bad "plan with no runtime exits 0 -- got $rc: $pout"
+case "$pout" in
+  *"RUNTIME"*"unavailable"*) ok "plan marks the runtime unavailable" ;;
+  *) bad "plan marks the runtime unavailable -- got: $pout" ;;
+esac
 case "$out" in
   *"runtime unavailable"*) ok "the envelope marks the runtime unavailable" ;;
   *) bad "the envelope marks the runtime unavailable -- got: $out" ;;

@@ -135,6 +135,7 @@ var verbs = []string{
 	"info",
 	"ls",
 	"network",
+	"plan",
 	"policy",
 	"rm",
 	"run",
@@ -152,6 +153,7 @@ var refVerbs = map[string]bool{
 	"stop": true,
 	"rm":   true,
 	"info": true,
+	"plan": true,
 }
 
 // complete decides what may stand where the cursor is.

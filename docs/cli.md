@@ -209,6 +209,35 @@ mode, the network, every published port and the credentials by name.
 secret marked `required: false` prints a warning, and the command still
 exits `0`.
 
+### `brig plan`
+
+```bash
+brig plan claude
+brig plan claude@refactor --json
+```
+
+Prints the permissions of a run without booting anything and without
+opening a secret. The plan has the guest home and the project with
+their mode and guest path, the network posture, every published port, every
+bound policy, the merged egress rules, the limits, the image, the
+verification mode, the runtime and its backend, and every credential with
+how it reaches the guest and where its value comes from.
+
+It reads the secret store the way `brig secret ls` does, by name. A secret
+missing from the store is marked `unresolved`, and the command still exits
+`0`. A store it cannot list marks a credential `unknown` when nothing later in
+its chain has a value. A credential the run drops at the denylist, or an
+unresolved secret-manager reference in the shell, is marked `withheld`.
+
+With no policy bound, `POLICY` reads `(none)` and `noPolicy` is `true`.
+
+The last row is a digest of the plan, `sha256:` over the JSON document with
+the digest left empty. Every list in it is sorted, so the digest is the same
+for the same run and changes when any permission does.
+
+`brig plan --json` prints `kind: Plan`. Its `network`, `image.ref` and
+`image.pull` are the same values `brig info --json` prints.
+
 ### `brig network`
 
 ```bash
@@ -645,6 +674,7 @@ verb.
 | --- | --- | --- |
 | `ls` | global, or local after `ls` | envelope |
 | `info`, `env` | global, or local on the run line | envelope |
+| `plan` | global, or local on the run line | envelope, `kind: Plan` |
 | `doctor` | global, or local after `doctor` | envelope |
 | `version` | global, or local after `version` | envelope |
 | `network ls`, `network publish`, `network unpublish` | global, or local after the ref | envelope, `kind: Ports` |
@@ -667,8 +697,8 @@ that works:
 ```
 brig --json agent show claude-code
 brig: `brig agent` has no --json output. --json is for the read verbs: ls,
-info, agent ls, secret ls, doctor, version and the network verbs (env takes
-it too, but env is deprecated; prefer info), and for run and sh
+info, plan, agent ls, secret ls, doctor, version and the network verbs (env
+takes it too, but env is deprecated; prefer info), and for run and sh
 ```
 
 The flag has to follow `agent show`, not precede `agent`. Every verb not
