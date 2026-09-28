@@ -749,6 +749,7 @@ a script.
 | `4` | no usable runtime: none installed, an unknown `BRIG_RUNTIME`, or `BRIG_RUNTIME_BIN` (or a profile's own `runtimeBin`) pointing at nothing. The refusal names the setting that caused it |
 | `5` | a boot refused over image verification |
 | `6` | a required secret was not resolved, or the secret store did not open |
+| `7` | the runtime and backend cannot enforce a property the command asks for, or cannot confirm they do. Today that is an egress policy on hull's `vz` or `qemu`, on nerdctl or docker, on `hvi` with a gateway probe that fails or finds no `--egress-default`, or on a hull backend Brig holds no answer for. The refusal names the property, the runtime and the backend. Brig v0.3.0 and earlier exit `1` for all of these but the failed probe. v0.3.0 booted that run with the policy unenforced |
 
 This table is asserted end to end by `script/smoke.sh` and
 `cmd/brig/exit_test.go`, and is the one [docs/stability.md](stability.md)

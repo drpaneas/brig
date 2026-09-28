@@ -693,6 +693,37 @@ func TestAMissingRuntimeIsTheRuntimeCode(t *testing.T) {
 	}
 }
 
+// A policy the backend cannot enforce is the capability code through the
+// daemon, as it is through the CLI. ensure reaches the refusal through
+// EnsureRunning, a path of its own, and a wrap there that flattens the error to
+// its words turns the 7 into a 1.
+func TestAPolicyVzCannotEnforceIsTheCapabilityCode(t *testing.T) {
+	stubRuntime(t)
+	agent := testProfile(t, "policyvz", "hypervisor: vz")
+	t.Setenv("BRIG_WORKSPACE", filepath.Join(shortDir(t), "ws"))
+	t.Setenv("BRIG_VERIFY", "off")
+	dir := shortDir(t)
+	doc := "apiVersion: brig.sh/v1alpha1\nname: no-net\negress:\n  default: deny\n"
+	if err := os.WriteFile(filepath.Join(dir, "no-net.yaml"), []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bound := "profiles:\n  " + agent + ": [no-net]\n"
+	if err := os.WriteFile(filepath.Join(dir, "attachments.yaml"), []byte(bound), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("BRIG_POLICY_DIR", dir)
+	socket := filepath.Join(shortDir(t), "brigd.sock")
+	startDaemon(t, socket)
+
+	resp := ask(t, socket, `{"op":"ensure","agent":"`+agent+`"}`)
+	if resp.OK {
+		t.Fatalf("a policy vz cannot enforce was booted: %+v", resp)
+	}
+	if resp.Code != 7 {
+		t.Errorf("a policy vz cannot enforce was not the capability code 7: %+v", resp)
+	}
+}
+
 // The peer decision, driven for both answers without a second user on the box:
 // the daemon's own uid is served, another is refused, and the refusal is a
 // well-formed response line rather than a dropped connection.

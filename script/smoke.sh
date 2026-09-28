@@ -626,13 +626,21 @@ export BRIG_POLICY_DIR="$WORK/policies"
   && ok "a policy attaches to a profile" \
   || bad "a policy attaches to a profile"
 : > "$STUB_LOG"
-if "$WORK/brig" run claude -d > "$WORK/pol.out" 2>&1; then
+"$WORK/brig" run claude -d > "$WORK/pol.out" 2>&1; rc=$?
+if [ "$rc" = 0 ]; then
   bad "a policy on a backend that cannot enforce it was booted anyway"
 else
   grep -q 'hvi' "$WORK/pol.out" \
     && ok "a policy brig cannot enforce refuses the boot, naming the backend that can" \
     || bad "the refusal does not name the backend -- got: $(cat "$WORK/pol.out")"
 fi
+# 7 is the code a script reads for "this runtime cannot enforce what the run
+# asked for", kept apart from a boot that failed for any other reason.
+[ "$rc" = 7 ] && ok "a policy vz cannot enforce exits 7" \
+  || bad "a policy vz cannot enforce exits 7 -- got $rc"
+BRIG_HYPERVISOR=qemu "$WORK/brig" run claude -d > /dev/null 2>&1; rc=$?
+[ "$rc" = 7 ] && ok "a policy qemu cannot enforce exits 7" \
+  || bad "a policy qemu cannot enforce exits 7 -- got $rc"
 grep -q '^argv: run' "$STUB_LOG" \
   && bad "the runtime was invoked for a policy that could not be enforced" \
   || ok "nothing reached the runtime"
