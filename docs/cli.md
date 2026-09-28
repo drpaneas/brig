@@ -229,6 +229,12 @@ missing from the store is marked `unresolved`, and the command still exits
 its chain has a value. A credential the run drops at the denylist, or an
 unresolved secret-manager reference in the shell, is marked `withheld`.
 
+A listing reads names, not values, so a secret in the store counts as
+`resolved` even when its value is empty. brig refuses to store an empty
+value, so only another tool leaves one. A run does not forward an empty
+secret. It moves on to the next source in the chain, or, when the secret is
+the last one, prints a warning that names it.
+
 With no policy bound, `POLICY` reads `(none)` and `noPolicy` is `true`.
 
 The last row is a digest of the plan, `sha256:` over the JSON document with

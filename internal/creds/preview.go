@@ -58,6 +58,15 @@ const (
 // whether the store answered at all. A listing reads no value. That lets a
 // plan run on a host whose keychain prompts for a read, and keeps a plan from
 // being one more place a value passes through.
+//
+// The price is that a listing cannot see an empty value: it reads names and
+// attributes, and on macOS an empty secret still has a sealed ciphertext.
+// A secret another tool emptied is resolved here, and Bind does not deliver
+// it: as the last element of a chain the run drops it with the "empty, not
+// absent" warning, and anywhere earlier Bind moves on to the next element
+// while this row names the empty one. So resolved from the store means the
+// listing has the name, not that the value is non-empty.
+//
 // lookup is the shell, as Bind reads it. A shell value is read only to apply
 // the same guards Bind applies, and it goes nowhere.
 //
