@@ -66,12 +66,11 @@ var sharedKernelShims = map[string]bool{
 //
 // Three cases, and the third is why this is not a boolean. urunc boots the
 // container as a microVM, so that is a kernel of its own. runc and crun share
-// the host kernel, and BRIG_CONTAINERD_RUNTIME pointing at one is the case this
-// row exists for: it is a supported thing to ask for and it used to be
-// invisible. Anything else -- a kata shim, a gVisor shim, a fork of urunc under
-// another name -- may well be a VM, and brig has no way to establish that from
-// a shim name, so it says so instead of picking the answer the reader would
-// prefer.
+// the host kernel; brig will not boot one (see refuseSharedKernel), and this
+// row still names it on `brig info`, which resolves the shim without booting.
+// Anything else -- a kata shim, a gVisor shim, a fork of urunc under another
+// name -- may well be a VM, and brig has no way to establish that from a shim
+// name, so it says so instead of picking the answer the reader would prefer.
 func containerdIsolation(driver, shim string) Isolation {
 	over := driver + " over containerd"
 	switch {

@@ -20,9 +20,11 @@ func TestNerdctlReportsAMicroVMOnTheUruncShim(t *testing.T) {
 	}
 }
 
-// The case the row exists for. BRIG_CONTAINERD_RUNTIME=runc is a supported
-// thing to ask for and it costs the kernel boundary, and until this row nothing
-// said so: the block reported the same sandbox either way.
+// brig now refuses to boot runc, but the row still names it: `brig info`
+// resolves the shim without booting, so a reader who set
+// BRIG_CONTAINERD_RUNTIME=runc still sees what it would be. It costs the kernel
+// boundary, and until this row nothing said so: the block reported the same
+// sandbox either way.
 func TestNerdctlReportsASharedKernelWhenTheShimIsReplaced(t *testing.T) {
 	t.Setenv("BRIG_CONTAINERD_RUNTIME", "runc")
 

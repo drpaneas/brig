@@ -328,3 +328,45 @@ func TestPruneNetworksKeepsWhatIsInUseAndWhatIsNotOurs(t *testing.T) {
 		}
 	}
 }
+
+// runc and crun give the guest the host's own kernel, which is not the boundary
+// brig provides, so a run that asks for one through BRIG_CONTAINERD_RUNTIME is
+// refused before the runtime is touched. The refusal lives in CanRun, not just
+// Run, so the join path a second `brig run` takes is covered too.
+func TestNerdctlRefusesASharedKernelShim(t *testing.T) {
+	for _, shim := range []string{"runc", "crun", "io.containerd.runc.v2"} {
+		t.Setenv("BRIG_CONTAINERD_RUNTIME", shim)
+		n := &nerdctl{bin: stubRuntimeBin(t, "STUB RAN", 0)}
+
+		err := n.Run(RunSpec{Name: "brig-x", Image: "img"})
+		if err == nil {
+			t.Fatalf("a run on the shared-kernel shim %q was not refused", shim)
+		}
+		if strings.Contains(err.Error(), "STUB RAN") {
+			t.Errorf("%q reached the runtime before the refusal: %v", shim, err)
+		}
+		if !strings.Contains(err.Error(), shim) {
+			t.Errorf("the refusal does not name the shim asked for: %v", err)
+		}
+		if !strings.Contains(err.Error(), uruncShim) {
+			t.Errorf("the refusal does not point back at the default microVM shim: %v", err)
+		}
+		// CanRun refuses too, so the join path (no Run) is covered.
+		if err := n.CanRun(RunSpec{Name: "brig-x", Image: "img"}); err == nil {
+			t.Errorf("CanRun let the shared-kernel shim %q through", shim)
+		}
+	}
+}
+
+// The default shim, and an unknown one brig cannot classify, are not refused:
+// urunc is a microVM, and a kata or urunc-fork shim may well be one, so the
+// shared-kernel refusal must not reach past the shims it can actually name.
+func TestNerdctlDoesNotRefuseUruncOrAnUnknownShim(t *testing.T) {
+	for _, shim := range []string{"", "io.containerd.kata.v2", "io.containerd.urunc.v2"} {
+		t.Setenv("BRIG_CONTAINERD_RUNTIME", shim)
+		n := &nerdctl{bin: "/usr/local/bin/nerdctl"}
+		if err := n.CanRun(RunSpec{Name: "brig-x", Image: "img"}); err != nil {
+			t.Errorf("CanRun refused a shim it should allow (%q): %v", shim, err)
+		}
+	}
+}
